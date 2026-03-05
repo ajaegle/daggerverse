@@ -3,6 +3,19 @@ from dagger import dag, field, function, object_type
 from urllib.parse import urlparse
 
 
+def _git_base_container(password: dagger.Secret) -> dagger.Container:
+    askpass_file = dag.current_module().source().file("assets/git-askpass.sh")
+    return (
+        dag.container()
+        .from_("alpine:3.23.3")
+        .with_exec(["apk", "add", "--no-cache", "git"])
+        .with_secret_variable("GIT_HTTP_PASSWORD", password)
+        .with_env_variable("GIT_ASKPASS", "/tmp/git-askpass")
+        .with_env_variable("GIT_TERMINAL_PROMPT", "0")
+        .with_file("/tmp/git-askpass", askpass_file, permissions=0o700)
+    )
+
+
 @object_type
 class Repo:
     directory: dagger.Directory = field()
@@ -30,6 +43,24 @@ class Repo:
             password=self.password,
         )
 
+    @function
+    async def push(self, remote: str = "origin", branch: str = "") -> str:
+        """Push the current repository state from a fresh Git container."""
+        if not remote:
+            raise ValueError("remote must not be empty")
+
+        push_cmd = ["git", "-c", f"credential.username={self.username}", "push", remote]
+        if branch:
+            push_cmd.append(branch)
+
+        return await (
+            _git_base_container(self.password)
+            .with_directory("/repo", self.directory)
+            .with_workdir("/repo")
+            .with_exec(push_cmd)
+            .stderr()
+        )
+
 
 @object_type
 class Gitclient:
@@ -50,7 +81,6 @@ class Gitclient:
         if not parsed.netloc:
             raise ValueError("repo must be a valid https URL")
 
-        askpass_file = dag.current_module().source().file("assets/git-askpass.sh")
         clone_cmd = [
             "git",
             "-c",
@@ -63,17 +93,7 @@ class Gitclient:
             "/repo",
         ]
 
-        repo_dir = (
-            dag.container()
-            .from_("alpine:3.23.3")
-            .with_exec(["apk", "add", "--no-cache", "git"])
-            .with_secret_variable("GIT_HTTP_PASSWORD", password)
-            .with_env_variable("GIT_ASKPASS", "/tmp/git-askpass")
-            .with_env_variable("GIT_TERMINAL_PROMPT", "0")
-            .with_file("/tmp/git-askpass", askpass_file, permissions=0o700)
-            .with_exec(clone_cmd)
-            .directory("/repo")
-        )
+        repo_dir = _git_base_container(password).with_exec(clone_cmd).directory("/repo")
         return Repo(
             directory=repo_dir,
             repo=repo,
