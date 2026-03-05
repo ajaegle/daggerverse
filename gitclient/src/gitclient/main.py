@@ -6,9 +6,9 @@ from urllib.parse import urlparse
 @object_type
 class Repo:
     directory: dagger.Directory = field()
-    repo_url: str = field()
-    git_username: str = field()
-    http_password: dagger.Secret = field()
+    repo: str = field()
+    username: str = field()
+    password: dagger.Secret = field()
 
     @function
     def worktree(self) -> dagger.Directory:
@@ -25,9 +25,9 @@ class Repo:
         )
         return Repo(
             directory=updated_directory,
-            repo_url=self.repo_url,
-            git_username=self.git_username,
-            http_password=self.http_password,
+            repo=self.repo,
+            username=self.username,
+            password=self.password,
         )
 
 
@@ -36,30 +36,30 @@ class Gitclient:
     @function
     def clone(
         self,
-        repo_url: str,
-        git_username: str,
-        http_password: dagger.Secret,
+        repo: str,
+        username: str,
+        password: dagger.Secret,
         ref: str = "main",
     ) -> Repo:
         """Clone an HTTPS repository using username + PAT/password auth."""
-        parsed = urlparse(repo_url)
+        parsed = urlparse(repo)
         if parsed.scheme != "https":
-            raise ValueError("repo_url must use https")
+            raise ValueError("repo must use https")
         if parsed.username is not None or parsed.password is not None:
-            raise ValueError("repo_url must not contain embedded credentials")
+            raise ValueError("repo must not contain embedded credentials")
         if not parsed.netloc:
-            raise ValueError("repo_url must be a valid https URL")
+            raise ValueError("repo must be a valid https URL")
 
         askpass_file = dag.current_module().source().file("assets/git-askpass.sh")
         clone_cmd = [
             "git",
             "-c",
-            f"credential.username={git_username}",
+            f"credential.username={username}",
             "clone",
             "--branch",
             ref,
             "--single-branch",
-            repo_url,
+            repo,
             "/repo",
         ]
 
@@ -67,17 +67,16 @@ class Gitclient:
             dag.container()
             .from_("alpine:3.23.3")
             .with_exec(["apk", "add", "--no-cache", "git"])
-            .with_secret_variable("GIT_HTTP_PASSWORD", http_password)
+            .with_secret_variable("GIT_HTTP_PASSWORD", password)
             .with_env_variable("GIT_ASKPASS", "/tmp/git-askpass")
             .with_env_variable("GIT_TERMINAL_PROMPT", "0")
             .with_file("/tmp/git-askpass", askpass_file, permissions=0o700)
-            .with_exec(["sh", "-lc", "/tmp/git-askpass"])
             .with_exec(clone_cmd)
             .directory("/repo")
         )
         return Repo(
             directory=repo_dir,
-            repo_url=repo_url,
-            git_username=git_username,
-            http_password=http_password,
+            repo=repo,
+            username=username,
+            password=password,
         )
