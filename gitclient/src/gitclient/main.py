@@ -44,6 +44,74 @@ class Repo:
         )
 
     @function
+    def write_file(self, path: str, content: str) -> "Repo":
+        """Create or overwrite a file in the repository worktree."""
+        if not path:
+            raise ValueError("path must not be empty")
+        if path == ".git" or path.startswith(".git/"):
+            raise ValueError("path must not target .git")
+
+        updated_directory = self.directory.with_new_file(path, content)
+        return Repo(
+            directory=updated_directory,
+            repo=self.repo,
+            username=self.username,
+            password=self.password,
+        )
+
+    @function
+    def add_all(self) -> "Repo":
+        """Stage all repository changes (`git add -A`)."""
+        updated_directory = (
+            _git_base_container(self.password)
+            .with_directory("/repo", self.directory)
+            .with_workdir("/repo")
+            .with_exec(["git", "add", "-A"])
+            .directory("/repo")
+        )
+        return Repo(
+            directory=updated_directory,
+            repo=self.repo,
+            username=self.username,
+            password=self.password,
+        )
+
+    @function
+    def commit(self, message: str, username: str, email: str) -> "Repo":
+        """Create a commit for staged changes."""
+        if not message:
+            raise ValueError("message must not be empty")
+        if not username:
+            raise ValueError("username must not be empty")
+        if not email:
+            raise ValueError("email must not be empty")
+
+        updated_directory = (
+            _git_base_container(self.password)
+            .with_directory("/repo", self.directory)
+            .with_workdir("/repo")
+            .with_exec(
+                [
+                    "git",
+                    "-c",
+                    f"user.name={username}",
+                    "-c",
+                    f"user.email={email}",
+                    "commit",
+                    "-m",
+                    message,
+                ]
+            )
+            .directory("/repo")
+        )
+        return Repo(
+            directory=updated_directory,
+            repo=self.repo,
+            username=self.username,
+            password=self.password,
+        )
+
+    @function
     async def push(self, remote: str = "origin", branch: str = "") -> str:
         """Push the current repository state from a fresh Git container."""
         if not remote:
