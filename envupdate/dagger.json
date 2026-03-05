@@ -1,0 +1,7 @@
+{
+  "name": "envupdate",
+  "engineVersion": "v0.20.0",
+  "sdk": {
+    "source": "python"
+  }
+}
