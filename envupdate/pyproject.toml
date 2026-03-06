@@ -10,3 +10,9 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 dagger-io = { path = "sdk", editable = true }
+
+[tool.ruff]
+line-length = 120
+
+[tool.black]
+line-length = 120
