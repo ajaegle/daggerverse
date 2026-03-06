@@ -113,7 +113,7 @@ class Repo:
 
     @function
     async def push(self, remote: str = "origin", branch: str = "") -> str:
-        """Push the current repository state from a fresh Git container."""
+        """Push the current repository state and return the pushed commit SHA."""
         if not remote:
             raise ValueError("remote must not be empty")
 
@@ -121,13 +121,14 @@ class Repo:
         if branch:
             push_cmd.append(branch)
 
-        return await (
-            _git_base_container(self.password)
+        return (
+            await _git_base_container(self.password)
             .with_directory("/repo", self.directory)
             .with_workdir("/repo")
             .with_exec(push_cmd)
-            .stderr()
-        )
+            .with_exec(["git", "rev-parse", "HEAD"])
+            .stdout()
+        ).strip()
 
 
 @object_type

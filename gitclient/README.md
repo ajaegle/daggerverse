@@ -13,7 +13,8 @@ dagger call clone --username ajaegle \
                   worktree entries
 ```
 
-Cloning a repository, updating and commiting a file and pushing the changes back to the remote.
+Cloning a repository, updating and commiting a file and pushing the changes back to the remote. The
+final `push` call returns the pushed commit SHA.
 
 ```shell
 dagger call clone --username ajaegle \
